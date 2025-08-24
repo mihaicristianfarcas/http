@@ -3,17 +3,18 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
-type Headers map[string]string
-
-var rn = []byte("\r\n")
-
-var ErrBadFieldLine = fmt.Errorf("bad field line")
-var ErrBadFieldName = fmt.Errorf("bad field name")
-
-func NewHeaders() Headers {
-	return map[string]string{}
+// a header must contain only:
+// Uppercase letters: A-Z
+// Lowercase letters: a-z
+// Digits: 0-9
+// Special characters: !, #, $, %, &, ', *, +, -, ., ^, _, `, |, ~
+func isToken(str []byte) bool {
+	tokenPattern := regexp.MustCompile(`^[A-Za-z0-9!#$%&'*+\-.^_` + "`" + `|~]+$`)
+	return tokenPattern.Match(str)
 }
 
 func parseHeader(fieldLine []byte) (string, string, error) {
@@ -30,6 +31,30 @@ func parseHeader(fieldLine []byte) (string, string, error) {
 	}
 
 	return string(name), string(value), nil
+}
+
+type Headers struct {
+	headers map[string]string
+}
+
+var rn = []byte("\r\n")
+
+var ErrBadFieldLine = fmt.Errorf("bad field line")
+var ErrBadFieldName = fmt.Errorf("bad field name")
+var ErrBadHeaderName = fmt.Errorf("bad header name")
+
+func NewHeaders() *Headers {
+	return &Headers{
+		headers: map[string]string{},
+	}
+}
+
+func (h *Headers) Get(name string) string {
+	return h.headers[strings.ToLower(name)]
+}
+
+func (h *Headers) Set(name, value string) {
+	h.headers[strings.ToLower(name)] = value
 }
 
 func (h Headers) Parse(data []byte) (int, bool, error) {
@@ -54,8 +79,12 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 			return 0, false, err
 		}
 
+		if !isToken([]byte(name)) {
+			return 0, false, ErrBadHeaderName
+		}
+
 		read += idx + len(rn)
-		h[name] = value
+		h.Set(name, value)
 	}
 
 	return read, done, nil
