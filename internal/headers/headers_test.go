@@ -34,5 +34,4 @@ func TestHeaderParse(t *testing.T) {
 	require.NotNil(t, headers)
 	assert.Equal(t, "localhost:42069,localhost:42069", headers.Get("Host"))
 	assert.True(t, done)
-
 }

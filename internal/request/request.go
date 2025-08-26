@@ -3,6 +3,7 @@ package request
 import (
 	"bytes"
 	"fmt"
+	"http-from-scratch/internal/headers"
 	"io"
 )
 
@@ -15,13 +16,15 @@ type RequestLine struct {
 type parserState string
 
 const (
-	StateInit  parserState = "init"
-	StateDone  parserState = "done"
-	StateError parserState = "error"
+	StateInit    parserState = "init"
+	StateHeaders parserState = "headers"
+	StateDone    parserState = "done"
+	StateError   parserState = "error"
 )
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     *headers.Headers
 	state       parserState
 }
 
@@ -31,7 +34,8 @@ func (r *RequestLine) ValidHTTP() bool {
 
 func newRequest() *Request {
 	return &Request{
-		state: StateInit,
+		state:   StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -77,6 +81,7 @@ func (r *Request) parse(data []byte) (int, error) {
 
 outer:
 	for {
+		currentData := data[read:]
 		switch r.state {
 		case StateError:
 			return 0, ErrRequestInErrorState
@@ -92,10 +97,29 @@ outer:
 
 			r.RequestLine = *rl
 			read += n
-			r.state = StateDone
+			r.state = StateHeaders
+
+		case StateHeaders:
+			n, done, err := r.Headers.Parse(currentData)
+			if err != nil {
+				return 0, err
+			}
+
+			if n == 0 {
+				break outer
+			}
+
+			read += n
+
+			if done {
+				r.state = StateDone
+			}
 
 		case StateDone:
 			break outer
+
+		default:
+			panic("certified bad programming moment")
 		}
 	}
 	return read, nil
