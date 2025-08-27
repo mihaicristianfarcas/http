@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"http-from-scratch/internal/headers"
 	"io"
+	"strconv"
 )
 
 type RequestLine struct {
@@ -20,22 +21,39 @@ const (
 	StateHeaders parserState = "headers"
 	StateDone    parserState = "done"
 	StateError   parserState = "error"
+	StateBody    parserState = "body"
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
 	state       parserState
+	Body        string
 }
 
 func (r *RequestLine) ValidHTTP() bool {
 	return r.HttpVersion == "1.1"
 }
 
+func getInt(headers *headers.Headers, name string, defaultValue int) int {
+	valueStr, exists := headers.Get(name)
+	if !exists {
+		return defaultValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return defaultValue
+	}
+
+	return value
+}
+
 func newRequest() *Request {
 	return &Request{
 		state:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body:    "",
 	}
 }
 
@@ -76,12 +94,23 @@ func ParseRequestLine(b []byte) (*RequestLine, int, error) {
 	return rl, read, nil
 }
 
+func (r *Request) HasBody() bool {
+	// TODO update method when doing chunked encoding
+	length := getInt(r.Headers, "content-length", 0)
+	return length > 0
+}
+
 func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 
-outer:
+dance:
 	for {
 		currentData := data[read:]
+
+		if len(currentData) == 0 {
+			break dance
+		}
+
 		switch r.state {
 		case StateError:
 			return 0, ErrRequestInErrorState
@@ -92,7 +121,7 @@ outer:
 			}
 
 			if n == 0 {
-				break outer
+				break dance
 			}
 
 			r.RequestLine = *rl
@@ -102,21 +131,42 @@ outer:
 		case StateHeaders:
 			n, done, err := r.Headers.Parse(currentData)
 			if err != nil {
+				r.state = StateError
 				return 0, err
 			}
 
 			if n == 0 {
-				break outer
+				break dance
 			}
 
 			read += n
 
+			// Normally we would not get an EOF after reading data
+			// so this is a workaround/transition
 			if done {
+				if r.HasBody() {
+					r.state = StateBody
+				} else {
+					r.state = StateDone
+				}
+			}
+
+		case StateBody:
+			length := getInt(r.Headers, "content-length", 0)
+			if length == 0 {
+				panic("chunked not implemented")
+			}
+
+			remaining := min(length-len(r.Body), len(currentData))
+			r.Body += string(currentData[:remaining])
+			read += remaining
+
+			if len(r.Body) == length {
 				r.state = StateDone
 			}
 
 		case StateDone:
-			break outer
+			break dance
 
 		default:
 			panic("certified bad programming moment")
