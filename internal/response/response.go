@@ -14,8 +14,8 @@ type StatusCode int
 const (
 	StatusOK                  StatusCode = 200
 	StatusBadRequest          StatusCode = 400
-	StatusNotFound                       = 404
-	StatusInternalServerError            = 500
+	StatusNotFound            StatusCode = 404
+	StatusInternalServerError StatusCode = 500
 )
 
 func GetDefaultHeaders(contentLength int) *headers.Headers {
