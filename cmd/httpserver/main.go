@@ -7,6 +7,7 @@ import (
 	"http-from-scratch/internal/request"
 	"http-from-scratch/internal/response"
 	"http-from-scratch/internal/server"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -91,10 +92,13 @@ func main() {
 
 				fullBody := []byte{}
 				for {
-					data := make([]byte, 32)
+					data := make([]byte, 1024)
 
 					n, err := res.Body.Read(data)
-					if err != nil || n == 0 {
+					if n == 0 || err == io.EOF {
+						break
+					}
+					if err != nil {
 						break
 					}
 
