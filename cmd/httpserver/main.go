@@ -94,7 +94,7 @@ func main() {
 					data := make([]byte, 32)
 
 					n, err := res.Body.Read(data)
-					if err != nil {
+					if err != nil || n == 0 {
 						break
 					}
 
@@ -113,6 +113,24 @@ func main() {
 				w.WriteHeaders(*trailers)
 				return
 			}
+
+		} else if req.RequestLine.RequestTarget == "/video" {
+			f, _ := os.ReadFile("assets/vim.mp4")
+
+			h.Replace("Content-Length", fmt.Sprintf("%d", len(f)))
+			h.Replace("Content-Type", "video/mp4")
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
+
+		} else if req.RequestLine.RequestTarget == "/background" {
+			f, _ := os.ReadFile("assets/background.jpg")
+
+			h.Replace("Content-Length", fmt.Sprintf("%d", len(f)))
+			h.Replace("Content-Type", "image/jpg")
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
 
 		} else {
 			body = respond200()
